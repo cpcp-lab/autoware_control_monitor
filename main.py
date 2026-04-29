@@ -39,6 +39,8 @@ def main():
                         help='Directory containing control_log.csv and marker_log.csv (default: examples/1)')
     parser.add_argument('--window', type=int, default=100,
                         help='Sliding window size in rows (default: 100)')
+    parser.add_argument('--debug', action='store_true',
+                        help='Show additional debug plot (local waypoint geometry)')
     parser.add_argument('--wb', type=float, default=2.79,
                         help='Vehicle wheelbase [m] (default: 2.79)')
     parser.add_argument('--aa', type=float, default=1.0,
@@ -74,55 +76,29 @@ def main():
     m_range = range(0, len(mdf)-window, window)
     m_subset = mdf.iloc[m_range]
 
-    _, axes = plt.subplots(1, 3, figsize=(10, 4))
+    n_plots = 3 if args.debug else 2
+    _, axes = plt.subplots(1, n_plots, figsize=(4*n_plots, 4))
 
     # Plot 1: vehicle positions (filled) and waypoints (hollow) with steering arrows
-    axes[0].scatter(m_subset['py'], m_subset['px'], marker='o', color='green')
-    axes[0].scatter(m_subset['wy'], m_subset['wx'], marker='o', color='green', facecolor='none')
-    for _, row in m_subset.iterrows():
+    axes[0].set_title('Global trajectory')
+    axes[0].set_xlabel('px')
+    axes[0].set_ylabel('py')
+    axes[0].set_aspect('equal')
+    axes[0].scatter(m_subset['px'], m_subset['py'], marker='o', color='green')
+    axes[0].scatter(m_subset['wx'], m_subset['wy'], marker='o', color='green', facecolor='none')
+    for i, (_, row) in enumerate(m_subset.iterrows()):
+        axes[0].annotate(str(i), (row.px, row.py),
+                         xytext=(4, 4), textcoords='offset points', fontsize=8)
         # Line from vehicle to waypoint
-        axes[0].plot([row.py, row.wy], [row.px, row.wx], '-', color='green')
-
-        #pm = pdf[pdf['time'] <= row['time']]
-        #if not pm.empty:
-        #    cid = pm.iloc[-1]['id']
-        #    pm = pm[pm['id'] == cid]
-        #    plt.scatter(pm['py'], pm['px'], marker='.', color='black', s=10)
+        axes[0].plot([row.px, row.wx], [row.py, row.wy], '-', color='green')
 
         # Draw steering direction arrow
         if not pd.isna(row['sta']):
-            axes[0].plot([row.py, row.py+nm.sin(row['yaw']+row['sta'])],
-                         [row.px, row.px+nm.cos(row['yaw']+row['sta'])], '-', color='black')
+            axes[0].plot([row.px, row.px+nm.cos(row['yaw']+row['sta'])],
+                         [row.py, row.py+nm.sin(row['yaw']+row['sta'])], '-', color='black')
 
-    #axes[0].xlabel('y')
-    #axes[0].ylabel('x')
-
-    # w0 - p0
-    # (w0 - p0) - (p1 - p0) = w0 - p1
-
-    # Plot 2: waypoint positions in vehicle-local frame relative to window start
-    for idx, row in m_subset.iterrows():
-        m_range1 = range(idx, idx+window)
-        m_ss1 = mdf.iloc[m_range1]
-
-        # Reference pose at the start of this window
-        r0 = m_ss1.iloc[0]
-        wx0 = r0['wx']
-        wy0 = r0['wy']
-        # Transform waypoint offsets into the local frame of each row's yaw
-        m_ss1 = m_ss1.assign(
-                wx1 = nm.cos(-m_ss1['yaw']) * (wx0-m_ss1['px']) -
-                      nm.sin(-m_ss1['yaw']) * (wy0-m_ss1['py']))
-        m_ss1 = m_ss1.assign(
-                wy1 = nm.sin(-m_ss1['yaw']) * (wx0-m_ss1['px']) +
-                      nm.cos(-m_ss1['yaw']) * (wy0-m_ss1['py']))
-
-        axes[1].scatter(-m_ss1['wy1'], m_ss1['wx1'], marker='o', color='green', s=10)
-
-    # Mark the origin (reference point)
-    axes[1].scatter([0], [0], marker='+', color='green')
-
-    # Plot 3: monitoring result for each sampled window
+    # Plot 2: monitoring result for each sampled window
+    axes[1].set_title('Monitoring result')
     for i, (idx, row) in enumerate(m_subset.iterrows()):
         #if i != 5:
         #    continue
@@ -196,16 +172,41 @@ def main():
             else:
                 col = 'red'
 
-            axes[2].plot([-wy1], [wx1], 'o', color=col)
+            axes[1].plot([-wy1], [wx1], 'o', color=col)
+            if j == idx:
+                axes[1].annotate(str(i), (-wy1, wx1),
+                                 xytext=(4, 4), textcoords='offset points', fontsize=8)
 
         print('%d: (%d&%d&%d&%d)&%d&%d&%d' % (i, a1_acc, a2_acc, f1_acc, f2_acc, g1_acc, gh_acc, gl_acc))
 
-    axes[2].plot([0], [0], marker='+', color='black')
+    axes[1].plot([0], [0], marker='+', color='black')
 
-    plt.xlabel('y')
-    plt.ylabel('x')
-    plt.title('Plots')
-    plt.grid(True)
+    # Plot 3 (debug): waypoint positions in vehicle-local frame relative to window start
+    if args.debug:
+        # w0 - p0
+        # (w0 - p0) - (p1 - p0) = w0 - p1
+        for idx, row in m_subset.iterrows():
+            m_range1 = range(idx, idx+window)
+            m_ss1 = mdf.iloc[m_range1]
+
+            # Reference pose at the start of this window
+            r0 = m_ss1.iloc[0]
+            wx0 = r0['wx']
+            wy0 = r0['wy']
+            # Transform waypoint offsets into the local frame of each row's yaw
+            m_ss1 = m_ss1.assign(
+                    wx1 = nm.cos(-m_ss1['yaw']) * (wx0-m_ss1['px']) -
+                          nm.sin(-m_ss1['yaw']) * (wy0-m_ss1['py']))
+            m_ss1 = m_ss1.assign(
+                    wy1 = nm.sin(-m_ss1['yaw']) * (wx0-m_ss1['px']) +
+                          nm.cos(-m_ss1['yaw']) * (wy0-m_ss1['py']))
+
+            axes[2].scatter(-m_ss1['wy1'], m_ss1['wx1'], marker='o', color='green', s=10)
+
+        # Mark the origin (reference point)
+        axes[2].scatter([0], [0], marker='+', color='green')
+
+    plt.tight_layout()
     plt.show()
 
 

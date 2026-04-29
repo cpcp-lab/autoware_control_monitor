@@ -38,7 +38,8 @@ Implement a single-script offline monitoring tool that:
 
 ### Verification
 
-- [ ] Refactor monitoring conditions into testable functions
-- [ ] Write pytest tests for `ann1`, `ann2`, `feas1`, `feas2`, `go1`, `go_h`, `go_l`
-- [ ] Write pytest tests for time synchronization (`merge_asof`) and windowed sampling
-- [ ] Run tests and confirm all pass
+- [x] Refactor monitoring conditions into testable functions
+- [x] Write pytest tests for `ann1`, `feas1`, `feas2`, `go1`
+- [x] Write pytest tests for `ann2`, `go_h`, `go_l`
+- [x] Write pytest tests for time synchronization (`merge_asof`) and windowed sampling
+- [x] Run tests and confirm all pass
