@@ -12,9 +12,9 @@ Single-run analysis: load one log directory, evaluate monitoring conditions per 
 
 ### Overall pipeline
 
-1. **Multi-run loading** — scan a collection of log sub-directories `1/` to `n/`.
-2. **Per-run monitoring** — apply single-run analysis to each directory `i/`.
-3. **Result aggregation and evaluation of the controller** — aggregate the results and identify the worst error across runs.
+1. **Batch loading** — scan a collection of log sub-directories `0/`, `1/`, …, `n/`.
+2. **Per-run monitoring** — apply single-run analysis to each directory.
+3. **Result aggregation** — count the number of valid/total windows across all runs and report the totals.
 
 ### Single-run analysis (current implementation)
 
@@ -22,8 +22,8 @@ Single-run analysis: load one log directory, evaluate monitoring conditions per 
 2. **Time synchronization** — align the two logs by timestamp so that each marker sample carries the most recent control values.
 3. **Windowed sampling** — divide the marker log into fixed-size sliding windows and select one representative row per window.
 4. **Monitoring evaluation** — for each window, evaluate annotation, feasibility, and go conditions row by row and accumulate conjunctive results.
-5. **Visualization** — render three subplots: global trajectory, local waypoint geometry, and per-waypoint monitoring outcome.
-6. **Result reporting** — print a one-line summary per window to stdout.
+5. **Visualization** — render three subplots: global trajectory, local waypoint geometry, and per-waypoint monitoring outcome (single-run mode only).
+6. **Result reporting** — print a one-line summary per window to stdout (single-run mode); print per-run and overall pass/fail counts to stdout (batch mode).
 
 ## Basic process of the implemented method
 
@@ -55,14 +55,17 @@ for each sampled row (window start):
 ## Usage examples
 
 ```bash
-# Run with default settings (data directory: 1, window: 100)
+# Run with default settings (data directory: examples/1, window: 100)
 python3 main.py
 
-# Specify a data directory
+# Specify a data directory (single-run mode)
 python3 main.py examples/0
 
-# Specify window size
+# Specify window size (single-run mode)
 python3 main.py --window 200 examples/0
+
+# Batch mode: process all subdirectories under examples/
+python3 main.py --batch examples
 ```
 
 ## Visualization
@@ -73,11 +76,19 @@ Three subplots are produced side by side.
 
 **Plot 2 — Monitoring result:** one dot per row in `[idx, idx_end]`, color-coded green (pass) / red (fail) based on `feas & go`. The origin marks the reference point.
 
-Per-window summary printed to stdout:
+Per-window summary printed to stdout (single-run mode):
 ```
 i: (ann1&ann2&feas1&feas2)&go1&go_h&go_l
 ```
 where each value is 1 (all rows passed) or 0 (at least one row failed).
+
+Batch-mode summary printed to stdout:
+```
+# windows: <num_windows>
+<subdir>: <valid_count>/<total_count>
+...
+total: <valid_total>/<total>
+```
 
 ## Parameters
 

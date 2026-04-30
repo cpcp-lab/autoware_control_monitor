@@ -1,6 +1,7 @@
 import pytest
 import sys
 import os
+from pathlib import Path
 import pandas as pd
 import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -9,7 +10,11 @@ from main import (
     check_ann1, check_ann2,
     check_feas1, check_feas2,
     check_go1, check_go_h, check_go_l,
+    Params, SingleRunResult, BatchResult,
+    run_single, run_batch,
 )
+
+EXAMPLES = Path(__file__).parent.parent / 'examples'
 
 EPS = 0.1
 EPS_V = 0.001
@@ -121,6 +126,54 @@ class TestGoL:
         # vel < vl and waypoint too close to accelerate
         assert check_go_l(kappa=0.0, eps=EPS, vel=1.0, acc=0.0,
                           th=TH, vl=1.5, aa=AA, wx1=0.2, wy1=0.0) is False
+
+
+class TestRunSingle:
+    def test_returns_single_run_result(self):
+        result = run_single(str(EXAMPLES / '0'), Params())
+        assert isinstance(result, SingleRunResult)
+
+    def test_counts_are_consistent(self):
+        result = run_single(str(EXAMPLES / '0'), Params())
+        assert result.total_count == len(result.windows_rows)
+        assert 0 <= result.valid_count <= result.total_count
+
+    def test_examples_2(self):
+        result = run_single(str(EXAMPLES / '2'), Params())
+        assert isinstance(result, SingleRunResult)
+        assert result.total_count > 0
+
+    def test_window_size_affects_count(self):
+        result_100 = run_single(str(EXAMPLES / '0'), Params(window=100))
+        result_200 = run_single(str(EXAMPLES / '0'), Params(window=200))
+        assert result_100.total_count >= result_200.total_count
+
+
+class TestRunBatch:
+    def test_returns_batch_result(self):
+        result = run_batch(str(EXAMPLES), Params())
+        assert isinstance(result, BatchResult)
+
+    def test_discovers_subdirs(self):
+        result = run_batch(str(EXAMPLES), Params())
+        names = [name for name, _ in result.runs]
+        assert '0' in names
+        assert '1' in names
+        assert '2' in names
+
+    def test_skips_non_log_dirs(self):
+        result = run_batch(str(EXAMPLES), Params())
+        names = [name for name, _ in result.runs]
+        assert 'raw' not in names
+
+    def test_aggregation_matches_runs(self):
+        result = run_batch(str(EXAMPLES), Params())
+        assert result.valid_total == sum(r.valid_count for _, r in result.runs)
+        assert result.total == sum(r.total_count for _, r in result.runs)
+
+    def test_valid_total_bounded(self):
+        result = run_batch(str(EXAMPLES), Params())
+        assert 0 <= result.valid_total <= result.total
 
 
 class TestDataProcessing:
