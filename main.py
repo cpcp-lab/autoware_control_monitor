@@ -2,7 +2,6 @@ import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
 import pandas as pd
-#import math
 import numpy as nm
 import matplotlib.pyplot as plt
 
@@ -10,12 +9,12 @@ import matplotlib.pyplot as plt
 def check_ann1(kappa, eps):
     return abs(kappa) * eps <= 1
 
-def check_ann2(kappa, wx1, wy1, eps):
-    return kappa * abs((wx1**2 + wy1**2 - eps**2) / 2 - wy1) < eps
+def check_ann2(kappa, wx, wy, eps):
+    return kappa * abs((wx**2 + wy**2 - eps**2) / 2 - wy) < eps
 
-def check_feas1(wx1, vl, vh, eps):
-    # TODO
-    return wx1 > eps and 0 <= vl and vl < vh
+def check_feas1(wx, vl, vh, eps):
+    # Slight deviation below 0 is allowed
+    return wx > -eps and 0 <= vl and vl < vh
 
 def check_feas2(aa, bb, th, vl, vh):
     return aa*th <= vh - vl and bb*th <= vh - vl
@@ -23,16 +22,18 @@ def check_feas2(aa, bb, th, vl, vh):
 def check_go1(bb, aa, acc, vel, th):
     return -bb <= acc and acc <= aa and vel + acc*th >= 0
 
-def check_go_h(kappa, eps, vel, acc, th, vh, bb, wx1, wy1):
+def check_go_h(kappa, eps, vel, acc, th, vh, bb, wx, wy):
     go_h1 = vel <= vh and vel + acc*th <= vh
-    go_h2 = (1 + abs(kappa)*eps)**2 * (vel*th + (acc/2)*th**2 + ((vel + acc*th)**2 - vh**2) / (2*bb)) \
-            + eps <= max(abs(wx1), abs(wy1))
+    go_h2 = (1 + abs(kappa)*eps)**2 \
+            * (vel*th + (acc/2)*th**2 + ((vel + acc*th)**2 - vh**2) / (2*bb)) \
+            + eps <= max(abs(wx), abs(wy))
     return go_h1 or go_h2
 
-def check_go_l(kappa, eps, vel, acc, th, vl, aa, wx1, wy1):
+def check_go_l(kappa, eps, vel, acc, th, vl, aa, wx, wy):
     go_l1 = vl <= vel and vl <= vel + acc*th
-    go_l2 = (1 + abs(kappa)*eps)**2 * (vel*th + (acc/2)*th**2 + (vl**2 - (vel + acc*th)**2) / (2*aa)) \
-            + eps <= max(abs(wx1), abs(wy1))
+    go_l2 = (1 + abs(kappa)*eps)**2 \
+            * (vel*th + (acc/2)*th**2 + (vl**2 - (vel + acc*th)**2) / (2*aa)) \
+            + eps <= max(abs(wx), abs(wy))
     return go_l1 or go_l2
 
 
@@ -42,8 +43,8 @@ class Params:
     wb: float = 2.79
     aa: float = 1.0
     bb: float = 0.5
-    eps: float = 0.1
-    eps_v: float = 0.001
+    eps: float = 1
+    eps_v: float = 0.1
     th: float = 0.001
 
 

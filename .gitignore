@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+examples/1/
+examples/2/

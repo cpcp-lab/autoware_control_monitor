@@ -40,16 +40,21 @@ class TestAnn1:
 class TestFeas1:
     def test_pass(self):
         # waypoint ahead, speed bounds valid
-        assert check_feas1(wx1=1.0, vl=0.5, vh=1.5) is True
+        assert check_feas1(wx=1.0, vl=0.5, vh=1.5, eps=EPS) is True
+
+    def test_pass_waypoint_slightly_behind(self):
+        # wx=-0.05 > -eps=-0.1: slight deviation behind origin is tolerated
+        assert check_feas1(wx=-0.05, vl=0.5, vh=1.5, eps=EPS) is True
 
     def test_fail_waypoint_behind(self):
-        assert check_feas1(wx1=-0.1, vl=0.5, vh=1.5) is False
+        # wx=-0.1 == -eps: not strictly greater, so fails
+        assert check_feas1(wx=-0.1, vl=0.5, vh=1.5, eps=EPS) is False
 
     def test_fail_vl_negative(self):
-        assert check_feas1(wx1=1.0, vl=-0.1, vh=1.5) is False
+        assert check_feas1(wx=1.0, vl=-0.1, vh=1.5, eps=EPS) is False
 
     def test_fail_vl_equals_vh(self):
-        assert check_feas1(wx1=1.0, vl=1.0, vh=1.0) is False
+        assert check_feas1(wx=1.0, vl=1.0, vh=1.0, eps=EPS) is False
 
 
 class TestFeas2:
@@ -81,51 +86,51 @@ class TestGo1:
 class TestAnn2:
     def test_pass_zero_kappa(self):
         # kappa=0 → 0 * anything = 0 < eps
-        assert check_ann2(kappa=0.0, wx1=1.0, wy1=0.0, eps=EPS) is True
+        assert check_ann2(kappa=0.0, wx=1.0, wy=0.0, eps=EPS) is True
 
     def test_pass_small_kappa(self):
-        # waypoint directly ahead (wy1=0), small kappa
-        assert check_ann2(kappa=0.1, wx1=1.0, wy1=0.0, eps=EPS) is True
+        # waypoint directly ahead (wy=0), small kappa
+        assert check_ann2(kappa=0.1, wx=1.0, wy=0.0, eps=EPS) is True
 
     def test_fail_large_kappa(self):
         # large kappa and large waypoint distance make the product exceed eps
-        assert check_ann2(kappa=5.0, wx1=2.0, wy1=2.0, eps=EPS) is False
+        assert check_ann2(kappa=5.0, wx=2.0, wy=2.0, eps=EPS) is False
 
 
 class TestGoH:
     def test_pass_via_go_h1(self):
         # vel <= vh and vel+acc*th <= vh
         assert check_go_h(kappa=0.0, eps=EPS, vel=1.0, acc=0.0,
-                          th=TH, vh=1.5, bb=BB, wx1=1.0, wy1=0.0) is True
+                          th=TH, vh=1.5, bb=BB, wx=1.0, wy=0.0) is True
 
     def test_fail_go_h1_pass_go_h2(self):
         # vel > vh (go_h1 fails), but waypoint is far enough for braking (go_h2 passes)
-        # braking distance ≈ (vel^2 - vh^2)/(2*bb) = (4-2.25)/1 = 1.75; waypoint at wx1=10
+        # braking distance ≈ (vel^2 - vh^2)/(2*bb) = (4-2.25)/1 = 1.75; waypoint at wx=10
         assert check_go_h(kappa=0.0, eps=EPS, vel=2.0, acc=0.0,
-                          th=TH, vh=1.5, bb=BB, wx1=10.0, wy1=0.0) is True
+                          th=TH, vh=1.5, bb=BB, wx=10.0, wy=0.0) is True
 
     def test_fail_both(self):
         # vel > vh and waypoint too close for braking
         assert check_go_h(kappa=0.0, eps=EPS, vel=2.0, acc=0.0,
-                          th=TH, vh=1.5, bb=BB, wx1=0.2, wy1=0.0) is False
+                          th=TH, vh=1.5, bb=BB, wx=0.2, wy=0.0) is False
 
 
 class TestGoL:
     def test_pass_via_go_l1(self):
         # vl <= vel and vl <= vel+acc*th
         assert check_go_l(kappa=0.0, eps=EPS, vel=1.0, acc=0.0,
-                          th=TH, vl=0.5, aa=AA, wx1=1.0, wy1=0.0) is True
+                          th=TH, vl=0.5, aa=AA, wx=1.0, wy=0.0) is True
 
     def test_fail_go_l1_pass_go_l2(self):
         # vel < vl (go_l1 fails), but waypoint is far enough to accelerate (go_l2 passes)
-        # acceleration distance ≈ (vl^2 - vel^2)/(2*aa) = (2.25-1)/2 = 0.625; waypoint at wx1=10
+        # acceleration distance ≈ (vl^2 - vel^2)/(2*aa) = (2.25-1)/2 = 0.625; waypoint at wx=10
         assert check_go_l(kappa=0.0, eps=EPS, vel=1.0, acc=0.0,
-                          th=TH, vl=1.5, aa=AA, wx1=10.0, wy1=0.0) is True
+                          th=TH, vl=1.5, aa=AA, wx=10.0, wy=0.0) is True
 
     def test_fail_both(self):
         # vel < vl and waypoint too close to accelerate
         assert check_go_l(kappa=0.0, eps=EPS, vel=1.0, acc=0.0,
-                          th=TH, vl=1.5, aa=AA, wx1=0.2, wy1=0.0) is False
+                          th=TH, vl=1.5, aa=AA, wx=0.2, wy=0.0) is False
 
 
 class TestRunSingle:
