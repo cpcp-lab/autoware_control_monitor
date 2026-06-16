@@ -103,3 +103,7 @@ For each sliding window the tool evaluates the following conditions row by row a
 | `go_l` | `vl ≤ vel` and `vl ≤ vel+acc·th`, or `(1+\|κ\|·ε)²·(vel·th + (acc/2)·th² + (vl²−(vel+acc·th)²)/(2·aa)) + ε ≤ wx` |
 
 where `κ` is curvature derived from the steering angle, `wx`/`wy` are the waypoint coordinates in the vehicle-local frame, and `vl = wv − eps_v`, `vh = wv + eps_v` are the velocity bounds.
+
+## License
+
+[Apache License, Version 2.0](LICENSE.txt).
