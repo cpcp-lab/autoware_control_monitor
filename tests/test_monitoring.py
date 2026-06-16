@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from main import (
     check_ann1, check_ann2,
-    check_feas1, check_feas2,
+    check_speed1, check_speed2,
     check_go1, check_go_h, check_go_l,
     Params, SingleRunResult, BatchResult,
     run_single, run_batch,
@@ -39,32 +39,29 @@ class TestAnn1:
 
 class TestFeas1:
     def test_pass(self):
-        # waypoint ahead, speed bounds valid
-        assert check_feas1(wx=1.0, vl=0.5, vh=1.5, eps=EPS) is True
+        assert check_speed1(vl=0.5, vh=1.5) is True
 
-    def test_pass_waypoint_slightly_behind(self):
-        # wx=-0.05 > -eps=-0.1: slight deviation behind origin is tolerated
-        assert check_feas1(wx=-0.05, vl=0.5, vh=1.5, eps=EPS) is True
+    def test_pass_vl_zero(self):
+        assert check_speed1(vl=0.0, vh=1.5) is True
 
-    def test_fail_waypoint_behind(self):
-        # wx=-0.1 == -eps: not strictly greater, so fails
-        assert check_feas1(wx=-0.1, vl=0.5, vh=1.5, eps=EPS) is False
+    def test_fail_vl_below_zero(self):
+        assert check_speed1(vl=-0.5, vh=0.5) is False
 
     def test_fail_vl_negative(self):
-        assert check_feas1(wx=1.0, vl=-0.1, vh=1.5, eps=EPS) is False
+        assert check_speed1(vl=-0.1, vh=1.5) is False
 
     def test_fail_vl_equals_vh(self):
-        assert check_feas1(wx=1.0, vl=1.0, vh=1.0, eps=EPS) is False
+        assert check_speed1(vl=1.0, vh=1.0) is False
 
 
 class TestFeas2:
     def test_pass(self):
         vl, vh = 0.5, 1.5  # vh - vl = 1.0 >> aa*th = 0.001
-        assert check_feas2(AA, BB, TH, vl, vh) is True
+        assert check_speed2(AA, BB, TH, vl, vh) is True
 
     def test_fail_too_narrow(self):
         # vh - vl = 0.0001 < aa*th = 0.001
-        assert check_feas2(AA, BB, TH, vl=1.0, vh=1.0001) is False
+        assert check_speed2(AA, BB, TH, vl=1.0, vh=1.0001) is False
 
 
 class TestGo1:

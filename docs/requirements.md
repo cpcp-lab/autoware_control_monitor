@@ -43,13 +43,13 @@ for each sampled row (window start):
         evaluate:
             ann1: |κ| · ε ≤ 1
             ann2: κ · |(wx1²+wy1²−ε²)/2 − wy1| < ε
-            feas1: wx1 > 0  and  0 ≤ vl < vh
-            feas2: aa·th ≤ vh−vl  and  bb·th ≤ vh−vl
+            speed1: wx1 > 0  and  0 ≤ vl < vh
+            speed2: aa·th ≤ vh−vl  and  bb·th ≤ vh−vl
             go1:  −bb ≤ acc ≤ aa  and  vel+acc·th ≥ 0
             go_h: vel ≤ vh  (or braking distance condition)
             go_l: vl ≤ vel  (or acceleration distance condition)
         accumulate conjunctive result
-    print summary:  i: (ann1&ann2&feas1&feas2)&go1&go_h&go_l
+    print summary:  i: (ann1&ann2&speed1&speed2)&go1&go_h&go_l
 ```
 
 ## Usage examples
@@ -59,13 +59,19 @@ for each sampled row (window start):
 python3 main.py
 
 # Specify a data directory (single-run mode)
-python3 main.py examples/0
+python3 main.py --data-dir examples/0
 
 # Specify window size (single-run mode)
-python3 main.py --window 200 examples/0
+python3 main.py --data-dir examples/0 --window 200
+
+# Plot only specific rows (0-based indices)
+python3 main.py --data-dir examples/0 --rows 0 9 16
 
 # Batch mode: process all subdirectories under examples/
-python3 main.py --batch examples
+python3 main.py --batch --data-dir examples
+
+# Batch mode with explicit parallelism (1 = serial execution)
+python3 main.py --batch --data-dir examples --workers 4
 ```
 
 ## Visualization
@@ -74,11 +80,11 @@ Three subplots are produced side by side.
 
 **Plot 1 — Global trajectory:** vehicle positions (filled circles), waypoints (hollow circles), vehicle-to-waypoint lines, and steering direction arrows.
 
-**Plot 2 — Monitoring result:** one dot per row in `[idx, idx_end]`, color-coded green (pass) / red (fail) based on `feas & go`. The origin marks the reference point.
+**Plot 2 — Monitoring result:** one dot per row in `[idx, idx_end]`, color-coded green (pass) / red (fail) based on `feas & go`, where `feas` = ann1 & ann2 & speed1 & speed2. The origin marks the reference point.
 
 Per-window summary printed to stdout (single-run mode):
 ```
-i: (ann1&ann2&feas1&feas2)&go1&go_h&go_l
+i: (ann1&ann2&speed1&speed2)&go1&go_h&go_l
 ```
 where each value is 1 (all rows passed) or 0 (at least one row failed).
 
@@ -96,7 +102,7 @@ total: <valid_total>/<total>
 |----------|---------|---------|
 | `wb` | 2.79 | Vehicle wheelbase [m] |
 | `aa` | 1.0 | Upper acceleration bound [m/s²] |
-| `bb` | 0.5 | Lower (deceleration) bound [m/s²] |
-| `eps` | 0.1 | Spatial tolerance [m] |
-| `eps_v` | 0.001 | Velocity tolerance [m/s] |
+| `bb` | 1.0 | Lower (deceleration) bound [m/s²] |
+| `eps` | 0.5 | Spatial tolerance [m] |
+| `eps_v` | 0.2 | Velocity tolerance [m/s] |
 | `th` | 0.001 | Time step [s] |
