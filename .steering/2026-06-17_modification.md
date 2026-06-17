@@ -1,0 +1,53 @@
+# Modification
+
+## Requirements
+
+Adjust aggregation data and aggregation method in `main.py`.
+
+1. **Single-run summary display** — print a summary line (matching batch format) at the end of single-run mode.
+2. **Refactor summary formatting** — extract a shared `format_run_summary` function used by both single-run and batch modes.
+3. **Output order** — reorder per-window debug line and summary line to show `!Is` / `!Rs` before the pass/fail fraction.
+4. **Aggregation scope** — exclude init-NG windows from `total_count`, `valid_count`, and `reached_ng_count`; count `unsound` only within init-OK windows.
+5. **Window validity display** — append `Vok` / `!V<r>` to per-window debug line, where `<r>` is a bitmask of failed conditions.
+6. **Named bit constants** — define `CODE_ANN1/2`, `CODE_SPEED1/2`, `CODE_GO1/H/L` and use them in `init_valid` and `v_mask` calculations.
+7. **README update** — reflect all output format changes in `README.md`.
+
+## Basic design
+
+- `format_run_summary(name, result: SingleRunResult) -> str`: formats a single-line summary as `{name}: !Is: ...\t!Rs: ...(...unsound)\t{valid}/{total}`.
+- `total_count` / `valid_count` / `reached_ng_count` / `unsound_count`: all scoped to init-OK windows only.
+- `v_mask` bitmask for window validity uses the same `CODE_*` constants as `init_valid`, with `CODE_GO1` added.
+- Per-window debug line format: `i: <init>; <reached>; (ann1&ann2&speed1&speed2)&go1&go_h&go_l; <valid>`
+- Summary line format: `total(<n> windows): !Is: ...\t!Rs: ...(...unsound)\t<valid>/<total>`
+
+## Tasks
+
+- [x] Extract `format_run_summary` and use it in batch output
+- [x] Print summary line in single-run mode using `format_run_summary`
+- [x] Reorder output: `!Is` / `!Rs` before fraction in summary lines
+- [x] Reorder per-window debug line: init/reached before accumulators
+- [x] Remove `dist` from per-window debug output
+- [x] Exclude init-NG windows from `total_count` and `valid_count`
+- [x] Exclude init-NG windows from `reached_ng_count`; simplify `unsound_count` condition
+- [x] Add `Vok` / `!V<r>` display to per-window debug line
+- [x] Define `CODE_ANN1/2`, `CODE_SPEED1/2`, `CODE_GO1/H/L` constants
+- [x] Use `CODE_*` constants in `init_valid` and `v_mask` calculations
+- [x] Update `README.md` to reflect current output format
+- [x] Add tests for `!Is`, `!Rs`, and unsound count aggregation
+
+## Tests added (2026-06-17)
+
+Tests for `!Is` / `!Rs` / unsound count aggregation were added to `tests/test_monitoring.py`.
+
+**`TestRunSingle`**
+- `test_init_ng_count_non_negative` — `init_ng_count` is non-negative
+- `test_init_ng_count_plus_total_equals_processed_windows` — `init_ng_count + total_count == len(windows_init)` (all isolation-passed windows are counted)
+- `test_reached_ng_count_bounded_by_total` — `reached_ng_count <= total_count`
+- `test_unsound_bounded_by_reached_ng` — `unsound_count <= reached_ng_count` (unsound is a subset of !Rs)
+- `test_valid_plus_reached_ng_equals_total` — `valid_count + reached_ng_count <= total_count`
+
+**`TestRunBatch`**
+- `test_batch_init_ng_aggregation` — `init_ng_total` equals sum of per-run `init_ng_count`
+- `test_batch_reached_ng_aggregation` — `reached_ng_total` equals sum of per-run `reached_ng_count`
+- `test_batch_unsound_aggregation` — `unsound_total` equals sum of per-run `unsound_count`
+- `test_batch_unsound_bounded_by_reached_ng` — `unsound_total <= reached_ng_total`

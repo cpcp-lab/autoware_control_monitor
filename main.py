@@ -8,6 +8,14 @@ import matplotlib.pyplot as plt
 
 ISOLATION_DIST = 0.5
 
+CODE_ANN1   = 1
+CODE_ANN2   = 2
+CODE_SPEED1 = 4
+CODE_SPEED2 = 8
+CODE_GO1    = 16
+CODE_GO_H   = 32
+CODE_GO_L   = 64
+
 def check_ann1(kappa, eps):
     return abs(kappa) * eps <= 1
 
@@ -71,7 +79,7 @@ class SingleRunResult:
     mdf: object = field(repr=False)          # pd.DataFrame, for plotting
     m_subset: object = field(repr=False)     # pd.DataFrame, for plotting
     windows_rows: list = field(repr=False)   # windows_rows[i] = [{'wx1', 'wy1', 'feas_go'}, ...]
-    windows_init: list = field(repr=False)   # windows_init[i] = int bitmask (0 = all satisfied; bits: ann1=1, ann2=2, speed1=4, speed2=8, go_h=16, go_l=32)
+    windows_init: list = field(repr=False)   # windows_init[i] = int bitmask (0 = all satisfied; bits: CODE_ANN1, CODE_ANN2, CODE_SPEED1, CODE_SPEED2, CODE_GO_H, CODE_GO_L)
 
 
 @dataclass
@@ -167,12 +175,12 @@ def run_single(data_dir, params, verbose=False):
         acc_init = row['a'] if not pd.isna(row['a']) else 0.0
         vel_init = row['v'] if not pd.isna(row['v']) else 0.0
         init_valid = (
-            (0 if check_ann1(kappa_init, eps) else 1)
-            | (0 if check_ann2(kappa_init, wx1_init, wy1_init, eps) else 2)
-            | (0 if check_speed1(vl, vh) else 4)
-            | (0 if check_speed2(aa, bb, th, vl, vh) else 8)
-            | (0 if check_go_h(kappa_init, eps, vel_init, acc_init, th, vh, bb, wx1_init, wy1_init, ic=True) else 16)
-            | (0 if check_go_l(kappa_init, eps, vel_init, acc_init, th, vl, aa, wx1_init, wy1_init, ic=True) else 32)
+            (0 if check_ann1(kappa_init, eps) else CODE_ANN1)
+            | (0 if check_ann2(kappa_init, wx1_init, wy1_init, eps) else CODE_ANN2)
+            | (0 if check_speed1(vl, vh) else CODE_SPEED1)
+            | (0 if check_speed2(aa, bb, th, vl, vh) else CODE_SPEED2)
+            | (0 if check_go_h(kappa_init, eps, vel_init, acc_init, th, vh, bb, wx1_init, wy1_init, ic=True) else CODE_GO_H)
+            | (0 if check_go_l(kappa_init, eps, vel_init, acc_init, th, vl, aa, wx1_init, wy1_init, ic=True) else CODE_GO_L)
         )
         windows_init.append(init_valid)
 
@@ -219,25 +227,31 @@ def run_single(data_dir, params, verbose=False):
 
             rows.append({'wx1': wx1, 'wy1': wy1, 'feas_go': feas and go})
 
-        valid = init_valid != 0 or all(r['feas_go'] for r in rows)
+        feas_go = all(r['feas_go'] for r in rows)
         if verbose:
-            print('%d: (%d&%d&%d&%d)&%d&%d&%d; %s; %s; dist=%.4f' % (
-                i, a1_acc, a2_acc, f1_acc, f2_acc, g1_acc, gh_acc, gl_acc,
+            v_mask = (0 if a1_acc else CODE_ANN1) | (0 if a2_acc else CODE_ANN2) \
+                   | (0 if f1_acc else CODE_SPEED1) | (0 if f2_acc else CODE_SPEED2) \
+                   | (0 if g1_acc else CODE_GO1) | (0 if gh_acc else CODE_GO_H) \
+                   | (0 if gl_acc else CODE_GO_L)
+            print('%d: %s; %s; (%d&%d&%d&%d)&%d&%d&%d; %s' % (
+                i,
                 'Iok' if init_valid == 0 else ('!I%d' % init_valid),
                 'Rok' if reached == 0 else ('!R%d' % reached),
-                dist,
+                a1_acc, a2_acc, f1_acc, f2_acc, g1_acc, gh_acc, gl_acc,
+                'Vok' if v_mask == 0 else ('!V%d' % v_mask),
             ))
         windows_rows.append(rows)
         windows_iloc.append(i)
-        total_count += 1
-        if valid:
-            valid_count += 1
         if init_valid != 0:
             init_ng_count += 1
-        if reached != 0:
-            reached_ng_count += 1
-            if init_valid == 0 and all(r['feas_go'] for r in rows):
-                unsound_count += 1
+        else:
+            total_count += 1
+            if feas_go:
+                valid_count += 1
+            if reached != 0:
+                reached_ng_count += 1
+                if feas_go:
+                    unsound_count += 1
 
     return SingleRunResult(
         valid_count=valid_count,
@@ -258,6 +272,10 @@ def _run_batch_single(args):
         print(f'{subdir}:')
     result = run_single(str(subdir), params, verbose=verbose)
     return (subdir.name, result)
+
+
+def format_run_summary(name, result: SingleRunResult) -> str:
+    return f'{name}:\t!Is: {result.init_ng_count}\t!Rs: {result.reached_ng_count}({result.unsound_count} unsound)\t{result.valid_count}/{result.total_count}'
 
 
 def run_batch(parent_dir, params, verbose=False, workers=None):
@@ -330,14 +348,15 @@ def main():
     if args.batch:
         batch = run_batch(args.data_dir, params, verbose=args.debug, workers=args.workers)
         for name, run in batch.runs:
-            tab = '\t\t' if len(name) + len(str(run.valid_count)) + len(str(run.total_count)) <= 4 else '\t'
-            print(f'{name}: {run.valid_count}/{run.total_count}{tab}!Is: {run.init_ng_count}\t!Rs: {run.reached_ng_count}({run.unsound_count} unsound)')
-        print(f'total({len(batch.runs)} runs): {batch.valid_total}/{batch.total}\t!Is: {batch.init_ng_total}\t!Rs: {batch.reached_ng_total}({batch.unsound_total} unsound)')
+            print(format_run_summary(name, run))
+        print(f'total({len(batch.runs)} runs): !Is: {batch.init_ng_total}\t!Rs: {batch.reached_ng_total}({batch.unsound_total} unsound)\t{batch.valid_total}/{batch.total}')
         return
 
     result = run_single(args.data_dir, params, verbose=True)
     if result is None:
         return
+
+    print(format_run_summary(f'total({result.total_count} windows)', result))
 
     mdf = result.mdf
     m_subset = result.m_subset

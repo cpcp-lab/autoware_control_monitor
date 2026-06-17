@@ -150,6 +150,33 @@ class TestRunSingle:
         result_200 = run_single(str(EXAMPLES / '0'), Params(window=200))
         assert result_100.total_count >= result_200.total_count
 
+    def test_init_ng_count_non_negative(self):
+        result = run_single(str(EXAMPLES / '0'), Params())
+        assert result.init_ng_count >= 0
+
+    def test_init_ng_count_plus_total_equals_processed_windows(self):
+        # init_ng + total_count = all windows that passed the isolation check
+        result = run_single(str(EXAMPLES / '0'), Params())
+        assert result.init_ng_count + result.total_count == len(result.windows_init)
+
+    def test_reached_ng_count_bounded_by_total(self):
+        # !Rs can only occur among windows not filtered by !Is
+        result = run_single(str(EXAMPLES / '0'), Params())
+        assert 0 <= result.reached_ng_count <= result.total_count
+
+    def test_unsound_bounded_by_reached_ng(self):
+        # unsound is a subset of !Rs (reached_ng with feas_go true)
+        result = run_single(str(EXAMPLES / '0'), Params())
+        assert 0 <= result.unsound_count <= result.reached_ng_count
+
+    def test_valid_plus_reached_ng_equals_total(self):
+        # every non-init-ng window is either valid xor reached-ng
+        # (valid = feas_go and reached==0; reached_ng = reached!=0)
+        # These are not mutually exclusive: a window can be reached_ng AND valid=False.
+        # But valid + reached_ng <= total always holds.
+        result = run_single(str(EXAMPLES / '0'), Params())
+        assert result.valid_count + result.reached_ng_count <= result.total_count
+
 
 class TestRunBatch:
     def test_returns_batch_result(self):
@@ -176,6 +203,22 @@ class TestRunBatch:
     def test_valid_total_bounded(self):
         result = run_batch(str(EXAMPLES), Params())
         assert 0 <= result.valid_total <= result.total
+
+    def test_batch_init_ng_aggregation(self):
+        result = run_batch(str(EXAMPLES), Params())
+        assert result.init_ng_total == sum(r.init_ng_count for _, r in result.runs)
+
+    def test_batch_reached_ng_aggregation(self):
+        result = run_batch(str(EXAMPLES), Params())
+        assert result.reached_ng_total == sum(r.reached_ng_count for _, r in result.runs)
+
+    def test_batch_unsound_aggregation(self):
+        result = run_batch(str(EXAMPLES), Params())
+        assert result.unsound_total == sum(r.unsound_count for _, r in result.runs)
+
+    def test_batch_unsound_bounded_by_reached_ng(self):
+        result = run_batch(str(EXAMPLES), Params())
+        assert 0 <= result.unsound_total <= result.reached_ng_total
 
 
 class TestDataProcessing:

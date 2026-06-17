@@ -61,16 +61,26 @@ python3 main.py --batch --data-dir examples
 
 ### Single-run mode
 
-A per-window summary is printed to stdout:
+A per-window summary line is printed to stdout (with `--debug`):
 
 ```
-i: (ann1&ann2&speed1&speed2)&go1&go_h&go_l; <init>; <reached>; dist=<d>
+i: <init>; <reached>; (ann1&ann2&speed1&speed2)&go1&go_h&go_l; <valid>
 ```
 
+- `<init>` — initial-condition result: `Iok` (all satisfied) or `!I<r>` where `<r>` is a bitmask of violated conditions (ann1=1, ann2=2, speed1=4, speed2=8, go_h=32, go_l=64).
+- `<reached>` — waypoint-reached result: `Rok` (reached) or `!R<r>` where `<r>` encodes which sub-condition failed when the window ended (eps-ball=1, velocity=2).
 - Each of the seven accumulator values is `1` (all rows in the window passed) or `0` (at least one row failed).
-- `<init>` — initial-condition result: `Iok` (all satisfied) or `Ing<r>` where `<r>` is a bitmask of violated conditions (ann1=1, ann2=2, speed1=4, speed2=8, go_h=16, go_l=32).
-- `<reached>` — waypoint-reached result: `Rok` (both conditions met) or `Rng<r>` where `<r>` encodes which condition was not met when the window ended (eps-ball=1, velocity=2).
-- `dist` — displacement of the waypoint between the first two rows of the window (used for the skip heuristic).
+- `<valid>` — window validity result: `Vok` (all conditions satisfied) or `!V<r>` where `<r>` is a bitmask of violated conditions (ann1=1, ann2=2, speed1=4, speed2=8, go1=16, go_h=32, go_l=64).
+
+A summary line is always printed at the end:
+
+```
+total(<n> windows): !Is: <init_ng>	!Rs: <reached_ng>(<unsound> unsound)	<valid>/<total>
+```
+
+- `!Is` — number of windows where the initial condition was violated (excluded from `valid`/`total`).
+- `!Rs` — number of init-OK windows where the waypoint was not reached; `unsound` is the subset where the monitoring condition was satisfied despite not reaching.
+- `<valid>/<total>` — windows (init OK) where all monitoring conditions held, out of all init-OK windows.
 
 Three plots are displayed side by side:
 
@@ -80,12 +90,12 @@ Three plots are displayed side by side:
 
 ### Batch mode
 
-Per-run and overall pass/fail counts are printed to stdout:
+Per-run and overall summaries are printed to stdout:
 
 ```
-<subdir>: <valid_count>/<total_count>
+<subdir>:	!Is: <init_ng>	!Rs: <reached_ng>(<unsound> unsound)	<valid>/<total>
 ...
-total: <valid_total>/<total>
+total(<n> runs): !Is: <init_ng_total>	!Rs: <reached_ng_total>(<unsound_total> unsound)	<valid_total>/<total>
 ```
 
 ## Monitoring conditions
