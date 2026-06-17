@@ -18,7 +18,10 @@ Adjust aggregation data and aggregation method in `main.py`.
 - `total_count` / `valid_count` / `reached_ng_count` / `unsound_count`: all scoped to init-OK windows only.
 - `v_mask` bitmask for window validity uses the same `CODE_*` constants as `init_valid`, with `CODE_GO1` added.
 - Per-window debug line format: `i: <init>; <reached>; (ann1&ann2&speed1&speed2)&go1&go_h&go_l; <valid>`
-- Summary line format: `total(<n> windows): !Is: ...\t!Rs: ...(...unsound)\t<valid>/<total>`
+- Summary line format: `total(<n> windows): !Is: ...\t!Rs: ...(...unsound)\t<valid>/<total>[*]`
+- `VL_LB = -0.01`: lower bound for `vl` (replaces hard zero), relaxing `check_speed1`, `check_go1`, and `vl` clamping in `run_single` by a small margin.
+- `check_go_init(acc, vel, th)`: separate initial-condition check for `vel + acc*th >= 0` (stricter than `check_go1` which uses `VL_LB`); included as `CODE_GO1` bit in `init_valid`.
+- All-skipped runs (no windows passed isolation check) are excluded from batch results and run count.
 
 ## Tasks
 
@@ -34,6 +37,10 @@ Adjust aggregation data and aggregation method in `main.py`.
 - [x] Use `CODE_*` constants in `init_valid` and `v_mask` calculations
 - [x] Update `README.md` to reflect current output format
 - [x] Add tests for `!Is`, `!Rs`, and unsound count aggregation
+- [x] Introduce `VL_LB` to slightly relax monitoring conditions
+- [x] Add `check_go_init` and include `CODE_GO1` in `init_valid` bitmask
+- [x] Append `*` to summary fraction when all windows pass
+- [x] Skip all-skipped runs from batch results
 
 ## Tests added (2026-06-17)
 

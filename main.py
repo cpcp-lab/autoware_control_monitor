@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as nm
 import matplotlib.pyplot as plt
 
+VL_LB = -0.01
+
 ISOLATION_DIST = 0.5
 
 CODE_ANN1   = 1
@@ -24,14 +26,17 @@ def check_ann2(kappa, wx, wy, eps):
     return abs(kappa * (wx**2 + wy**2 - eps**2) / 2 - wy) < eps
 
 def check_speed1(vl, vh):
-    return 0 <= vl and vl < vh
+    return VL_LB <= vl and vl < vh
 
 def check_speed2(aa, bb, th, vl, vh):
     return aa*th <= vh - vl and bb*th <= vh - vl
 
+def check_go_init(acc, vel, th):
+    return vel + acc*th >= 0
+
 def check_go1(bb, aa, acc, vel, th):
     #print(acc)
-    return -bb <= acc and acc <= aa and vel + acc*th >= 0
+    return -bb <= acc and acc <= aa and vel + acc*th >= VL_LB
 
 def check_go_h(kappa, eps, vel, acc, th, vh, bb, wx, wy, ic=False):
     if ic:
@@ -132,7 +137,7 @@ def run_single(data_dir, params, verbose=False):
         wx0 = row['wx']
         wy0 = row['wy']
         wv0 = row['wv']
-        vl = max(0, wv0 - eps_v)
+        vl = max(VL_LB, wv0 - eps_v)
         vh = wv0 + eps_v
 
         # Check initial conditions at window start
@@ -148,6 +153,7 @@ def run_single(data_dir, params, verbose=False):
             wx1 = nm.cos(-r1['yaw']) * (wx0 - r1['px']) - nm.sin(-r1['yaw']) * (wy0 - r1['py'])
             wy1 = nm.sin(-r1['yaw']) * (wx0 - r1['px']) + nm.cos(-r1['yaw']) * (wy0 - r1['py'])
             if wx1**2 + wy1**2 <= eps**2 and vl <= r1['v'] <= vh:
+            #if wx1**2 + wy1**2 <= eps**2 and (wv0 - eps_v) <= r1['v'] <= vh:
                 idx_end = j
                 reached = 0
                 break
@@ -179,6 +185,7 @@ def run_single(data_dir, params, verbose=False):
             | (0 if check_ann2(kappa_init, wx1_init, wy1_init, eps) else CODE_ANN2)
             | (0 if check_speed1(vl, vh) else CODE_SPEED1)
             | (0 if check_speed2(aa, bb, th, vl, vh) else CODE_SPEED2)
+            | (0 if check_go_init(acc_init, vel_init, th) else CODE_GO1)
             | (0 if check_go_h(kappa_init, eps, vel_init, acc_init, th, vh, bb, wx1_init, wy1_init, ic=True) else CODE_GO_H)
             | (0 if check_go_l(kappa_init, eps, vel_init, acc_init, th, vl, aa, wx1_init, wy1_init, ic=True) else CODE_GO_L)
         )
@@ -275,7 +282,8 @@ def _run_batch_single(args):
 
 
 def format_run_summary(name, result: SingleRunResult) -> str:
-    return f'{name}:\t!Is: {result.init_ng_count}\t!Rs: {result.reached_ng_count}({result.unsound_count} unsound)\t{result.valid_count}/{result.total_count}'
+    perfect = result.total_count > 0 and result.valid_count == result.total_count
+    return f'{name}:\t!Is: {result.init_ng_count}\t!Rs: {result.reached_ng_count}({result.unsound_count} unsound)\t{result.valid_count}/{result.total_count}{"*" if perfect else ""}'
 
 
 def run_batch(parent_dir, params, verbose=False, workers=None):
@@ -294,6 +302,8 @@ def run_batch(parent_dir, params, verbose=False, workers=None):
     with ProcessPoolExecutor(max_workers=workers) as executor:
         for name, result in executor.map(_run_batch_single, [(s, params, verbose) for s in subdirs]):
             if result is None:
+                continue
+            if len(result.windows_rows) == 0:
                 continue
             runs.append((name, result))
             valid_total += result.valid_count
@@ -349,7 +359,8 @@ def main():
         batch = run_batch(args.data_dir, params, verbose=args.debug, workers=args.workers)
         for name, run in batch.runs:
             print(format_run_summary(name, run))
-        print(f'total({len(batch.runs)} runs): !Is: {batch.init_ng_total}\t!Rs: {batch.reached_ng_total}({batch.unsound_total} unsound)\t{batch.valid_total}/{batch.total}')
+        perfect = batch.total > 0 and batch.valid_total == batch.total
+        print(f'total({len(batch.runs)} runs): !Is: {batch.init_ng_total}\t!Rs: {batch.reached_ng_total}({batch.unsound_total} unsound)\t{batch.valid_total}/{batch.total}{"*" if perfect else ""}')
         return
 
     result = run_single(args.data_dir, params, verbose=True)

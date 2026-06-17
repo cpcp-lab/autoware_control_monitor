@@ -75,9 +75,13 @@ class TestGo1:
     def test_fail_acc_too_low(self):
         assert check_go1(BB, AA, acc=-1.0, vel=1.0, th=TH) is False
 
-    def test_fail_speed_goes_negative(self):
-        # vel=0, acc=-0.3 (within bounds), but vel+acc*th = -0.0003 < 0
-        assert check_go1(BB, AA, acc=-0.3, vel=0.0, th=TH) is False
+    def test_pass_speed_slightly_negative(self):
+        # vel=0, acc=-0.3, vel+acc*th = -0.0003 >= VL_LB(-0.01) → pass
+        assert check_go1(BB, AA, acc=-0.3, vel=0.0, th=TH) is True
+
+    def test_fail_speed_below_vl_lb(self):
+        # vel=0, acc=-100, vel+acc*th = -0.1 < VL_LB(-0.01) → fail
+        assert check_go1(BB, AA, acc=-100.0, vel=0.0, th=TH) is False
 
 
 class TestAnn2:
@@ -137,7 +141,7 @@ class TestRunSingle:
 
     def test_counts_are_consistent(self):
         result = run_single(str(EXAMPLES / '0'), Params())
-        assert result.total_count == len(result.windows_rows)
+        assert result.total_count + result.init_ng_count == len(result.windows_rows)
         assert 0 <= result.valid_count <= result.total_count
 
     def test_examples_2(self):
