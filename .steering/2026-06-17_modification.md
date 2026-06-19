@@ -42,6 +42,23 @@ Adjust aggregation data and aggregation method in `main.py`.
 - [x] Append `*` to summary fraction when all windows pass
 - [x] Skip all-skipped runs from batch results
 
+## Segment–ball intersection for reached check (2026-06-19)
+
+ウェイポイント到達判定（`reached` フラグ）において，ログデータのサンプリング間隔が粗い場合にウェイポイントの ε-ball を飛び越してしまう問題に対処するため，点単体での距離判定から**線分と ε-ball の交差判定**へ変更した。
+
+### 変更箇所 (`main.py` — `run_single` 内の reached 判定ループ)
+
+- `wx1_prev, wy1_prev` を直前ループのローカル座標として保持する。
+- 2 点目以降は，前点 `(wx1_prev, wy1_prev)` から現点 `(wx1, wy1)` への線分と ε-ball の交差を判定する。
+  - 交差条件：判別式 `b^2 - 4ac >= 0` かつ解 `t` の範囲 `[0, 1]` に交点が存在すること。
+  - `a == 0`（前点と同一点）のときは点判定（`c <= 0`）にフォールバック。
+- 最初のループ（`wx1_prev is None`）では従来通り点判定を行う。
+- 速度条件 `vl <= r1['v'] <= vh` は現点での値をそのまま使用する（補間なし）。
+
+### Tasks
+
+- [x] Implement segment–ball intersection check in reached loop
+
 ## Tests added (2026-06-17)
 
 Tests for `!Is` / `!Rs` / unsound count aggregation were added to `tests/test_monitoring.py`.

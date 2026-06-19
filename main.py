@@ -149,11 +149,24 @@ def run_single(data_dir, params, verbose=False):
         # where the waypoint passes behind the vehicle,
         idx_end = idx
         reached = 3
+        wx1_prev, wy1_prev = None, None
         for j, r1 in mdf.loc[idx:].iterrows():
             wx1 = nm.cos(-r1['yaw']) * (wx0 - r1['px']) - nm.sin(-r1['yaw']) * (wy0 - r1['py'])
             wy1 = nm.sin(-r1['yaw']) * (wx0 - r1['px']) + nm.cos(-r1['yaw']) * (wy0 - r1['py'])
-            if wx1**2 + wy1**2 <= eps**2 and vl <= r1['v'] <= vh:
-            #if wx1**2 + wy1**2 <= eps**2 and (wv0 - eps_v) <= r1['v'] <= vh:
+            # Check if the segment from previous point to current point intersects eps-ball
+            if wx1_prev is not None:
+                dx, dy = wx1 - wx1_prev, wy1 - wy1_prev
+                # |P0 + t*d|^2 = eps^2 => |d|^2 t^2 + 2(P0·d)t + |P0|^2 - eps^2 = 0
+                a = dx**2 + dy**2
+                b = 2 * (wx1_prev * dx + wy1_prev * dy)
+                c = wx1_prev**2 + wy1_prev**2 - eps**2
+                in_ball = (a > 0 and b**2 - 4*a*c >= 0 and
+                           (-b - nm.sqrt(b**2 - 4*a*c)) / (2*a) <= 1 and
+                           (-b + nm.sqrt(b**2 - 4*a*c)) / (2*a) >= 0) or \
+                          (a == 0 and c <= 0)
+            else:
+                in_ball = wx1**2 + wy1**2 <= eps**2
+            if in_ball and vl <= r1['v'] <= vh:
                 idx_end = j
                 reached = 0
                 break
@@ -162,6 +175,7 @@ def run_single(data_dir, params, verbose=False):
                 reached = (0 if wx1**2 + wy1**2 <= eps**2 else 1) \
                          | (0 if vl <= r1['v'] <= vh else 2)
                 break
+            wx1_prev, wy1_prev = wx1, wy1
 
         # Skip window if no subsequent point is found within dist < ISOLATION_DIST of (wx1_init, wy1_init)
         dist = float('nan')
