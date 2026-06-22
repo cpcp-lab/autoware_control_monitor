@@ -71,7 +71,8 @@ class Params:
     bb: float = 1.0
     eps: float = 0.5
     eps_v: float = 0.2
-    th: float = 0.001
+    #th: float = 0.001
+    th: float = 0.03
 
 
 @dataclass
@@ -81,6 +82,7 @@ class SingleRunResult:
     init_ng_count: int
     reached_ng_count: int
     unsound_count: int
+    skip_count: int
     mdf: object = field(repr=False)          # pd.DataFrame, for plotting
     m_subset: object = field(repr=False)     # pd.DataFrame, for plotting
     windows_rows: list = field(repr=False)   # windows_rows[i] = [{'wx1', 'wy1', 'feas_go'}, ...]
@@ -95,6 +97,7 @@ class BatchResult:
     init_ng_total: int
     reached_ng_total: int
     unsound_total: int
+    skip_total: int
 
 
 def run_single(data_dir, params, verbose=False):
@@ -106,8 +109,8 @@ def run_single(data_dir, params, verbose=False):
     th = params.th
     window = params.window
 
-    cdf = pd.read_csv(f'{data_dir}/control_log.csv', header=None, names=['time','sta','v','a'], parse_dates=['time'])
-    mdf = pd.read_csv(f'{data_dir}/marker_log.csv', header=None, names=['time','px','py','yaw','wx','wy','wv'], parse_dates=['time'])
+    cdf = pd.read_csv(f'{data_dir}/control_log.csv', header=None, names=['time','sta','gv','a'], parse_dates=['time'])
+    mdf = pd.read_csv(f'{data_dir}/marker_log.csv', header=None, names=['time','px','py','yaw','v','wx','wy','wv'], parse_dates=['time'])
     if cdf.empty:
         print(f'{data_dir}: skipped (control_log.csv is empty)')
         return None
@@ -132,6 +135,7 @@ def run_single(data_dir, params, verbose=False):
     init_ng_count = 0
     reached_ng_count = 0
     unsound_count = 0
+    skip_count = 0
 
     for i, (idx, row) in enumerate(m_subset.iterrows()):
         wx0 = row['wx']
@@ -147,8 +151,9 @@ def run_single(data_dir, params, verbose=False):
         # Search for idx_end: first row
         # where the waypoint enters the eps-ball with velocity in [vl, vh] or
         # where the waypoint passes behind the vehicle,
-        idx_end = idx
+        idx_end = mdf.index[-1]
         reached = 3
+        end_found = False
         wx1_prev, wy1_prev = None, None
         for j, r1 in mdf.loc[idx:].iterrows():
             wx1 = nm.cos(-r1['yaw']) * (wx0 - r1['px']) - nm.sin(-r1['yaw']) * (wy0 - r1['py'])
@@ -169,13 +174,20 @@ def run_single(data_dir, params, verbose=False):
             if in_ball and vl <= r1['v'] <= vh:
                 idx_end = j
                 reached = 0
+                end_found = True
                 break
             if wx1 <= 0:
                 idx_end = j
                 reached = (0 if wx1**2 + wy1**2 <= eps**2 else 1) \
                          | (0 if vl <= r1['v'] <= vh else 2)
+                end_found = True
                 break
             wx1_prev, wy1_prev = wx1, wy1
+        if not end_found:
+            if verbose:
+                print('%d: skipped (waypoint not reached or passed)' % i)
+            skip_count += 1
+            continue
 
         # Skip window if no subsequent point is found within dist < ISOLATION_DIST of (wx1_init, wy1_init)
         dist = float('nan')
@@ -189,6 +201,7 @@ def run_single(data_dir, params, verbose=False):
         if nm.isnan(dist) or dist >= ISOLATION_DIST:
             if verbose:
                 print('%d: skipped (dist=%.4f)' % (i, dist))
+            skip_count += 1
             continue
 
         kappa_init = nm.tan(row['sta']) / wb if not pd.isna(row['sta']) else 0.0
@@ -280,6 +293,7 @@ def run_single(data_dir, params, verbose=False):
         init_ng_count=init_ng_count,
         reached_ng_count=reached_ng_count,
         unsound_count=unsound_count,
+        skip_count=skip_count,
         mdf=mdf,
         m_subset=m_subset.iloc[windows_iloc],
         windows_rows=windows_rows,
@@ -297,7 +311,7 @@ def _run_batch_single(args):
 
 def format_run_summary(name, result: SingleRunResult) -> str:
     perfect = result.total_count > 0 and result.valid_count == result.total_count
-    return f'{name}:\t!Is: {result.init_ng_count}\t!Rs: {result.reached_ng_count}({result.unsound_count} unsound)\t{result.valid_count}/{result.total_count}{"*" if perfect else ""}'
+    return f'{name}:\t!Is: {result.init_ng_count}\t!Rs: {result.reached_ng_count}({result.unsound_count} unsound)\t{result.valid_count}/{result.total_count}{"*" if perfect else ""} ({result.skip_count} skipped)'
 
 
 def run_batch(parent_dir, params, verbose=False, workers=None):
@@ -312,12 +326,13 @@ def run_batch(parent_dir, params, verbose=False, workers=None):
     init_ng_total = 0
     reached_ng_total = 0
     unsound_total = 0
+    skip_total = 0
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
         for name, result in executor.map(_run_batch_single, [(s, params, verbose) for s in subdirs]):
             if result is None:
                 continue
-            if len(result.windows_rows) == 0:
+            if len(result.windows_rows) == 0 and result.skip_count == 0:
                 continue
             runs.append((name, result))
             valid_total += result.valid_count
@@ -325,10 +340,11 @@ def run_batch(parent_dir, params, verbose=False, workers=None):
             init_ng_total += result.init_ng_count
             reached_ng_total += result.reached_ng_count
             unsound_total += result.unsound_count
+            skip_total += result.skip_count
 
     return BatchResult(runs=runs, valid_total=valid_total, total=total,
                        init_ng_total=init_ng_total, reached_ng_total=reached_ng_total,
-                       unsound_total=unsound_total)
+                       unsound_total=unsound_total, skip_total=skip_total)
 
 
 def main():
@@ -374,7 +390,7 @@ def main():
         for name, run in batch.runs:
             print(format_run_summary(name, run))
         perfect = batch.total > 0 and batch.valid_total == batch.total
-        print(f'total({len(batch.runs)} runs): !Is: {batch.init_ng_total}\t!Rs: {batch.reached_ng_total}({batch.unsound_total} unsound)\t{batch.valid_total}/{batch.total}{"*" if perfect else ""}')
+        print(f'total({len(batch.runs)} runs): !Is: {batch.init_ng_total}\t!Rs: {batch.reached_ng_total}({batch.unsound_total} unsound)\t{batch.valid_total}/{batch.total}{"*" if perfect else ""} ({batch.skip_total} skipped)')
         return
 
     result = run_single(args.data_dir, params, verbose=True)
